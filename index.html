@@ -1,0 +1,280 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Open-Meteo 世界気象レポート生成ツール</title>
+<meta name="description" content="都市名検索、期間指定、日別・月別・時間帯別の集計、インタラクティブグラフ、CSV保存、A4横印刷に対応したOpen-Meteoベースの気象レポート生成ツールです。">
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+:root{
+  --bg:#07111f;--bg2:#0b1f3a;--card:rgba(255,255,255,.94);--text:#0f172a;--muted:#64748b;
+  --line:rgba(148,163,184,.38);--accent:#3b82f6;--accent2:#06b6d4;--accent3:#8b5cf6;
+  --danger:#b42318;--warn:#92400e;--shadow:0 24px 70px rgba(2,6,23,.24);--radius:24px;
+}
+*{box-sizing:border-box}
+body{
+  margin:0;font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  color:var(--text);background:
+  radial-gradient(circle at 12% 8%,rgba(59,130,246,.55),transparent 34%),
+  radial-gradient(circle at 88% 18%,rgba(6,182,212,.42),transparent 32%),
+  linear-gradient(135deg,var(--bg),var(--bg2) 52%,#0f172a);min-height:100vh;
+}
+body:before{
+  content:"";position:fixed;inset:0;pointer-events:none;opacity:.30;
+  background-image:linear-gradient(rgba(255,255,255,.055) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.055) 1px,transparent 1px);
+  background-size:42px 42px;
+}
+header{max-width:1220px;margin:auto;padding:42px 22px 20px;color:white;position:relative}
+.hero{display:grid;grid-template-columns:1.25fr .75fr;gap:22px;align-items:stretch}
+.heroText{padding:34px;border-radius:32px;background:linear-gradient(135deg,rgba(255,255,255,.16),rgba(255,255,255,.06));border:1px solid rgba(255,255,255,.22);backdrop-filter:blur(16px);box-shadow:0 20px 80px rgba(0,0,0,.18)}
+.badge{display:inline-flex;gap:8px;align-items:center;border:1px solid rgba(255,255,255,.24);background:rgba(255,255,255,.12);padding:8px 12px;border-radius:999px;font-size:13px;font-weight:800;margin-bottom:14px}
+h1{margin:0 0 12px;font-size:clamp(32px,5vw,58px);line-height:1;letter-spacing:-.06em}
+header p{margin:0;color:rgba(255,255,255,.78);line-height:1.8;max-width:900px;font-size:16px}
+.heroPanel{display:grid;gap:14px}.heroStat{border-radius:28px;padding:20px;background:rgba(255,255,255,.13);border:1px solid rgba(255,255,255,.2);backdrop-filter:blur(16px);box-shadow:0 20px 70px rgba(0,0,0,.14)}
+.heroStat b{display:block;font-size:28px;letter-spacing:-.04em}.heroStat span{color:rgba(255,255,255,.76);font-size:13px}
+main{max-width:1220px;margin:0 auto 70px;padding:0 22px;position:relative}
+.card{background:var(--card);border:1px solid rgba(255,255,255,.55);border-radius:var(--radius);box-shadow:var(--shadow);padding:24px;margin:18px 0;backdrop-filter:blur(18px)}
+.cardHeader{display:flex;justify-content:space-between;gap:16px;align-items:flex-start;margin-bottom:14px}
+.step{display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:12px;background:linear-gradient(135deg,var(--accent),var(--accent2));color:white;font-weight:900;margin-right:10px;box-shadow:0 10px 30px rgba(37,99,235,.28)}
+.grid{display:grid;gap:16px}.cols{grid-template-columns:1.1fr .85fr .85fr}.two{grid-template-columns:repeat(2,minmax(0,1fr))}
+label{display:block;font-weight:800;margin-bottom:8px;color:#1e293b}
+input,select,button{width:100%;font:inherit;border-radius:16px;border:1px solid var(--line);padding:13px 14px;background:#fff;color:var(--text);outline:none;transition:.15s border,.15s box-shadow,.15s transform}
+input:focus,select:focus{border-color:rgba(59,130,246,.85);box-shadow:0 0 0 4px rgba(59,130,246,.13)}
+input[type=checkbox]{width:auto;margin-right:8px;accent-color:var(--accent)}
+button{cursor:pointer;border:none;background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;font-weight:900;box-shadow:0 14px 35px rgba(37,99,235,.25)}
+button:hover{transform:translateY(-1px)}button.secondary{background:linear-gradient(135deg,#334155,#0f172a)}button.ghost{background:#e2e8f0;color:#0f172a;box-shadow:none}button:disabled{opacity:.55;cursor:not-allowed;transform:none}
+.row{display:flex;gap:12px;align-items:end}.row>*{flex:1}.hint,.small{color:var(--muted);font-size:14px;line-height:1.65}
+.status{padding:12px 14px;border-radius:16px;background:#eff6ff;color:#1e3a8a;border:1px solid #bfdbfe;margin-top:14px;display:none;white-space:pre-wrap}
+.error{background:#fff1f2!important;color:var(--danger)!important;border-color:#fecdd3!important}.warn{background:#fffbeb!important;color:var(--warn)!important;border-color:#fde68a!important}
+.results{margin-top:12px;display:grid;gap:10px}.place{border:1px solid var(--line);border-radius:18px;padding:14px;background:#fff;cursor:pointer;box-shadow:0 8px 18px rgba(15,23,42,.04)}
+.place:hover{border-color:var(--accent);background:#f8fbff;transform:translateY(-1px)}.place.selected{border-color:var(--accent);background:#eff6ff;box-shadow:0 10px 26px rgba(37,99,235,.12)}
+.checkGrid label{border:1px solid var(--line);border-radius:16px;padding:12px;background:#fff;margin:0}
+.kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}.kpi{border:1px solid rgba(148,163,184,.28);border-radius:22px;padding:18px;background:linear-gradient(135deg,#fff,#f8fbff);box-shadow:0 12px 32px rgba(15,23,42,.06)}
+.kpi .value{font-size:28px;font-weight:950;letter-spacing:-.04em;margin-top:6px}.kpi .label{color:var(--muted);font-size:13px;font-weight:800}
+h2{margin:0 0 12px;font-size:24px;letter-spacing:-.035em}h3{margin:20px 0 10px}.chartCard{border:1px solid rgba(148,163,184,.34);border-radius:22px;padding:16px;background:#fff;box-shadow:0 14px 35px rgba(15,23,42,.06)}
+.chartBox{height:330px}.chartBox.tall{height:380px}canvas{width:100%;height:100%;display:block}
+table{width:100%;border-collapse:collapse;margin-top:10px;font-size:14px;background:#fff}th,td{border-bottom:1px solid var(--line);padding:10px 9px;text-align:right;white-space:nowrap}th:first-child,td:first-child{text-align:left}th{background:#f8fafc;position:sticky;top:0;z-index:1}
+.tableWrap{max-height:460px;overflow:auto;border:1px solid var(--line);border-radius:18px;background:#fff}
+.pill{display:inline-flex;align-items:center;gap:6px;background:#e0f2fe;color:#075985;border-radius:999px;padding:7px 11px;font-size:13px;font-weight:800;margin:0 8px 8px 0}
+.actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px}.actions button{width:auto;padding:11px 15px}.hidden{display:none}.footerNote{font-size:13px;color:var(--muted);line-height:1.75}
+.printOnly{display:none}
+@media(max-width:900px){.hero{grid-template-columns:1fr}.cols,.two,.kpis{grid-template-columns:1fr}.row{flex-direction:column;align-items:stretch}}
+@page{size:A4 landscape;margin:8mm}
+@media print{
+  html,body{width:297mm;height:210mm;background:#fff!important;overflow:hidden}
+  body:before,header,.no-print,.screenOnly,#annualSection,#monthlySection,#dailySection,#dataSection{display:none!important}
+  main{max-width:none;margin:0;padding:0}
+  .printOnly{display:block!important}
+  #report{display:block!important}
+  .card{box-shadow:none;border:0;background:#fff!important;backdrop-filter:none;margin:0;padding:4mm;break-inside:avoid}
+  #reportTitle{font-size:18pt;margin:0 0 2mm}
+  #reportMeta{font-size:8pt;line-height:1.25}
+  .pill{font-size:7.5pt;padding:2mm 2.6mm;margin:0 1.5mm 1.5mm 0}
+  .kpis{grid-template-columns:repeat(4,1fr);gap:2mm}
+  .kpi{padding:2.5mm;border-radius:4mm;box-shadow:none}
+  .kpi .label{font-size:7pt}.kpi .value{font-size:13pt;margin-top:1mm}
+  h2{font-size:13pt;margin:0 0 2mm}
+  .printGrid{display:grid!important;grid-template-columns:1fr 1fr;gap:3mm}
+  .chartCard{box-shadow:none;border:1px solid #d7dde8;border-radius:4mm;padding:2mm}
+  .chartBox{height:58mm!important}
+  .footerNote{font-size:7pt;line-height:1.25}
+}
+</style>
+</head>
+<body>
+<header>
+  <div class="hero">
+    <div class="heroText">
+      <div class="badge">🌍 Open-Meteo Dashboard Generator</div>
+      <h1>世界中の気象データを<br>美しいHTMLレポートに</h1>
+      <p>都市名検索、期間プリセット、任意日付範囲、特定日抽出に対応。グラフはマウスオーバーで値を確認できます。印刷時はA4横1枚向けの要約レイアウトに自動変換します。</p>
+    </div>
+    <div class="heroPanel">
+      <div class="heroStat"><b>City Search</b><span>都市・地名から候補を選択</span></div>
+      <div class="heroStat"><b>Daily / Monthly</b><span>日別データと月別集計を表示</span></div>
+      <div class="heroStat"><b>Interactive</b><span>ツールチップ付きグラフ</span></div>
+    </div>
+  </div>
+</header>
+
+<main>
+<section class="card no-print">
+  <h2><span class="step">1</span>都市・地名を検索</h2>
+  <div class="row">
+    <div><label for="placeQuery">都市名・地名</label><input id="placeQuery" type="search" value="Sydney" placeholder="例：Tokyo, Sydney, Paris, New York, Sapporo"><div class="hint">Open-Meteo Geocoding APIで候補を検索します。</div></div>
+    <div style="max-width:180px"><label for="lang">検索言語</label><select id="lang"><option value="ja" selected>日本語</option><option value="en">English</option><option value="de">Deutsch</option><option value="fr">Français</option><option value="es">Español</option><option value="it">Italiano</option></select></div>
+    <div style="max-width:180px"><button id="searchBtn">検索</button></div>
+  </div>
+  <div id="placeStatus" class="status"></div><div id="placeResults" class="results"></div>
+</section>
+
+<section class="card no-print">
+  <h2><span class="step">2</span>期間・抽出条件・項目を指定</h2>
+  <div id="selectedPlace" class="hint">まず都市・地名を検索して候補を選択してください。</div>
+  <div class="grid cols" style="margin-top:16px">
+    <div><label for="periodPreset">期間プリセット</label><select id="periodPreset"><option value="10y" selected>過去10年間</option><option value="5y">過去5年間</option><option value="3y">過去3年間</option><option value="1y">過去1年間</option><option value="ytd">今年の1月1日から昨日まで</option><option value="custom">任意の日付範囲</option></select><div class="hint">プリセット選択後も、日付は手動変更できます。</div></div>
+    <div><label for="startDate">開始日</label><input id="startDate" type="date"></div>
+    <div><label for="endDate">終了日</label><input id="endDate" type="date"></div>
+  </div>
+  <div class="grid cols" style="margin-top:16px">
+    <div><label for="filterMode">表示データ</label><select id="filterMode"><option value="all" selected>全日データ</option><option value="specificDay">毎年の特定日だけ</option><option value="specificMonth">毎年の特定月だけ</option></select><div class="hint">例：過去10年間の10月31日だけ。</div></div>
+    <div><label for="filterMonth">月</label><select id="filterMonth"></select></div>
+    <div><label for="filterDay">日</label><select id="filterDay"></select></div>
+  </div>
+  <div class="grid cols" style="margin-top:16px">
+    <div><label for="timezone">タイムゾーン</label><select id="timezone"><option value="auto" selected>地点に合わせる（auto）</option><option value="GMT">GMT</option></select></div>
+    <div><label for="temperatureUnit">気温単位</label><select id="temperatureUnit"><option value="celsius" selected>摂氏 ℃</option><option value="fahrenheit">華氏 ℉</option></select></div>
+    <div><label for="windUnit">風速単位</label><select id="windUnit"><option value="kmh" selected>km/h</option><option value="ms">m/s</option><option value="mph">mph</option><option value="kn">kn</option></select></div>
+  </div>
+  <h3>取得する日別変数</h3>
+  <div class="grid two checkGrid">
+    <label><input type="checkbox" class="dailyVar" value="temperature_2m_max" checked>最高気温</label>
+    <label><input type="checkbox" class="dailyVar" value="temperature_2m_min" checked>最低気温</label>
+    <label><input type="checkbox" class="dailyVar" value="temperature_2m_mean" checked>平均気温</label>
+    <label><input type="checkbox" class="dailyVar" value="precipitation_sum" checked>降水量</label>
+    <label><input type="checkbox" class="dailyVar" value="rain_sum" checked>雨量</label>
+    <label><input type="checkbox" class="dailyVar" value="precipitation_hours" checked>降水時間</label>
+    <label><input type="checkbox" class="dailyVar" value="wind_speed_10m_max" checked>最大風速</label>
+    <label><input type="checkbox" class="dailyVar" value="wind_gusts_10m_max" checked>最大瞬間風速</label>
+    <label><input type="checkbox" class="dailyVar" value="sunshine_duration" checked>日照時間</label>
+    <label><input type="checkbox" class="dailyVar" value="shortwave_radiation_sum" checked>短波放射量</label>
+    <label><input type="checkbox" class="dailyVar" value="weather_code" checked>天気コード</label>
+  </div>
+  <h3>取得する時間別変数</h3>
+  <div class="grid two checkGrid">
+    <label><input type="checkbox" class="hourlyVar" value="temperature_2m" checked>気温</label>
+    <label><input type="checkbox" class="hourlyVar" value="relative_humidity_2m" checked>相対湿度</label>
+    <label><input type="checkbox" class="hourlyVar" value="apparent_temperature">体感温度</label>
+    <label><input type="checkbox" class="hourlyVar" value="precipitation" checked>降水量</label>
+    <label><input type="checkbox" class="hourlyVar" value="rain">雨量</label>
+    <label><input type="checkbox" class="hourlyVar" value="weather_code">天気コード</label>
+    <label><input type="checkbox" class="hourlyVar" value="cloud_cover">雲量</label>
+    <label><input type="checkbox" class="hourlyVar" value="pressure_msl">海面気圧</label>
+    <label><input type="checkbox" class="hourlyVar" value="wind_speed_10m" checked>風速</label>
+    <label><input type="checkbox" class="hourlyVar" value="wind_direction_10m">風向</label>
+    <label><input type="checkbox" class="hourlyVar" value="wind_gusts_10m">瞬間風速</label>
+    <label><input type="checkbox" class="hourlyVar" value="shortwave_radiation">短波放射</label>
+  </div>
+  <p class="hint">時間別データは件数が多いため、長期間では取得・描画に時間がかかる場合があります。10年分では約87,600行の時間別データになります。</p>
+  <div class="actions"><button id="generateBtn" disabled>レポート生成</button><button id="sampleBtn" class="ghost" type="button">シドニー10年・10月31日サンプル</button></div>
+  <div id="dataStatus" class="status"></div>
+</section>
+
+<section id="report" class="hidden">
+  <section class="card">
+    <h2 id="reportTitle">気象レポート</h2><div id="reportMeta" class="small"></div>
+    <div class="actions no-print"><button id="downloadHtmlBtn" class="secondary">このレポートHTMLを保存</button><button id="downloadCsvBtn" class="secondary">表示データCSVを保存</button><button id="printBtn" class="ghost">印刷 / PDF保存</button></div>
+  </section>
+
+  <section class="card"><h2>概要</h2><div id="kpis" class="kpis"></div></section>
+
+  <section class="card screenOnly">
+    <h2>インタラクティブグラフ</h2>
+    <div class="grid two">
+      <div class="chartCard"><h3>年別 平均気温・総降水量</h3><div class="chartBox"><canvas id="yearChart"></canvas></div></div>
+      <div class="chartCard"><h3>月別 平均気温・総降水量</h3><div class="chartBox"><canvas id="monthChart"></canvas></div></div>
+      <div class="chartCard"><h3>表示データ：平均気温</h3><div class="chartBox tall"><canvas id="tempChart"></canvas></div></div>
+      <div class="chartCard"><h3>表示データ：降水量</h3><div class="chartBox tall"><canvas id="rainChart"></canvas></div></div>
+      <div class="chartCard"><h3>時間帯別 気温（平均・最高・最低）</h3><div class="chartBox tall"><canvas id="hourOfDayChart"></canvas></div></div>
+      <div class="chartCard"><h3>時間別データ：気温</h3><div class="chartBox tall"><canvas id="hourlyTempChart"></canvas></div></div>
+    </div>
+  </section>
+
+  <section class="card printOnly">
+    <h2>主要グラフ</h2>
+    <div class="printGrid">
+      <div class="chartCard"><h3>年別 平均気温・総降水量</h3><div class="chartBox"><canvas id="printYearChart"></canvas></div></div>
+      <div class="chartCard"><h3>表示データ：平均気温</h3><div class="chartBox"><canvas id="printTempChart"></canvas></div></div>
+    </div>
+    <p class="footerNote">詳細な月別・日別データは画面上の表、またはCSV保存で確認できます。Open-Meteoの履歴気象データは再解析データに基づくため、特定観測所の実測値と完全一致しない場合があります。</p>
+  </section>
+
+  <section id="annualSection" class="card"><h2>年別集計</h2><div id="annualTable" class="tableWrap"></div></section>
+  <section id="monthlySection" class="card"><h2>月別集計</h2><div id="monthlyTable" class="tableWrap"></div></section>
+  <section id="hourlyAggSection" class="card"><h2>時間帯別集計</h2><div id="hourlyAggTable" class="tableWrap"></div></section>
+  <section id="dailySection" class="card"><h2>表示データ（日別 / 抽出後）</h2><div id="dailyTable" class="tableWrap"></div></section>
+  <section id="hourlySection" class="card"><h2>表示データ（時間別 / 抽出後）</h2><div class="actions no-print"><button id="downloadHourlyCsvBtn" class="secondary">時間別データCSVを保存</button></div><div id="hourlyTable" class="tableWrap"></div></section>
+  <section id="dataSection" class="card"><h2>データについて</h2><p class="footerNote">このレポートはOpen-MeteoのGeocoding APIで都市・地名を緯度経度へ変換し、Historical Weather APIから日別・時間別の履歴気象データを取得しています。</p></section>
+</section>
+</main>
+
+<script>
+const GEO_URL='https://geocoding-api.open-meteo.com/v1/search';
+const ARCHIVE_URL='https://archive-api.open-meteo.com/v1/archive';
+const el=id=>document.getElementById(id);
+let selected=null, rawRows=[], viewRows=[], hourlyRows=[], hourlyViewRows=[], lastDailyUnits={}, lastHourlyUnits={}, charts=[];
+const LABELS={temperature_2m_max:'最高気温',temperature_2m_min:'最低気温',temperature_2m_mean:'平均気温',precipitation_sum:'降水量',rain_sum:'雨量',precipitation_hours:'降水時間',wind_speed_10m_max:'最大風速',wind_gusts_10m_max:'最大瞬間風速',sunshine_duration:'日照時間',shortwave_radiation_sum:'短波放射量',weather_code:'天気コード',temperature_2m:'気温',relative_humidity_2m:'相対湿度',apparent_temperature:'体感温度',precipitation:'降水量',rain:'雨量',cloud_cover:'雲量',pressure_msl:'海面気圧',wind_speed_10m:'風速',wind_direction_10m:'風向',wind_gusts_10m:'瞬間風速',shortwave_radiation:'短波放射'};
+function escapeHtml(s){return String(s??'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]))}
+function toISO(d){return d.toISOString().slice(0,10)}
+function yesterday(){const d=new Date();d.setDate(d.getDate()-1);return d}
+function addYears(d,y){const x=new Date(d);x.setFullYear(x.getFullYear()+y);return x}
+function showStatus(id,msg,type='info'){const b=el(id);b.textContent=msg;b.className='status '+(type==='error'?'error':type==='warn'?'warn':'');b.style.display=msg?'block':'none'}
+function fmt(n,d=1){if(n==null||Number.isNaN(Number(n)))return '—';return Number(n).toLocaleString('ja-JP',{maximumFractionDigits:d,minimumFractionDigits:d})}
+function clean(a){return a.filter(v=>v!=null&&!Number.isNaN(Number(v))).map(Number)}
+function mean(a){const x=clean(a);return x.length?x.reduce((p,c)=>p+c,0)/x.length:null}
+function sum(a){const x=clean(a);return x.length?x.reduce((p,c)=>p+c,0):null}
+function min(a){const x=clean(a);return x.length?Math.min(...x):null}
+function max(a){const x=clean(a);return x.length?Math.max(...x):null}
+function initSelectors(){el('filterMonth').innerHTML=Array.from({length:12},(_,i)=>`<option value="${String(i+1).padStart(2,'0')}" ${i===9?'selected':''}>${i+1}月</option>`).join('');el('filterDay').innerHTML=Array.from({length:31},(_,i)=>`<option value="${String(i+1).padStart(2,'0')}" ${i===30?'selected':''}>${i+1}日</option>`).join('')}
+function applyPreset(){const p=el('periodPreset').value;if(p==='custom')return;const end=yesterday();let start=new Date(end);if(p==='10y')start=addYears(end,-10);if(p==='5y')start=addYears(end,-5);if(p==='3y')start=addYears(end,-3);if(p==='1y')start=addYears(end,-1);if(p==='ytd')start=new Date(end.getFullYear(),0,1);el('startDate').value=toISO(start);el('endDate').value=toISO(end)}
+async function searchPlaces(){const q=el('placeQuery').value.trim();if(!q)return showStatus('placeStatus','都市名・地名を入力してください。','warn');showStatus('placeStatus','検索中...');el('placeResults').innerHTML='';selected=null;el('generateBtn').disabled=true;try{const params=new URLSearchParams({name:q,count:'10',language:el('lang').value,format:'json'});const res=await fetch(`${GEO_URL}?${params}`);if(!res.ok)throw new Error(`Geocoding API error: ${res.status}`);const data=await res.json();const results=data.results||[];if(!results.length)return showStatus('placeStatus','候補が見つかりませんでした。英字表記や近くの大都市名で試してください。','warn');showStatus('placeStatus',`${results.length}件の候補が見つかりました。使う地点を選択してください。`);el('placeResults').innerHTML=results.map((p,i)=>`<div class="place" data-i="${i}"><strong>${escapeHtml(p.name||'')}</strong><div class="small">${escapeHtml([p.admin1,p.admin2,p.country].filter(Boolean).join(' / '))}</div><div class="small">緯度 ${p.latitude}, 経度 ${p.longitude}, 標高 ${p.elevation??'—'}m, TZ ${escapeHtml(p.timezone||'—')}</div></div>`).join('');document.querySelectorAll('.place').forEach(node=>node.addEventListener('click',()=>{document.querySelectorAll('.place').forEach(n=>n.classList.remove('selected'));node.classList.add('selected');selected=results[Number(node.dataset.i)];el('selectedPlace').innerHTML=`<span class="pill">${escapeHtml(selected.name)}</span>${escapeHtml([selected.admin1,selected.country].filter(Boolean).join(' / '))} / ${selected.latitude}, ${selected.longitude}`;el('generateBtn').disabled=false}))}catch(err){showStatus('placeStatus','検索に失敗しました: '+err.message,'error')}}
+function vars(){return Array.from(document.querySelectorAll('.dailyVar:checked')).map(x=>x.value)}
+function hourlyVars(){return Array.from(document.querySelectorAll('.hourlyVar:checked')).map(x=>x.value)}
+function normalize(daily){return daily.time.map((t,i)=>{const r={time:t};Object.keys(daily).forEach(k=>{if(k!=='time')r[k]=daily[k][i]});return r})}
+function applyFilter(rows){const mode=el('filterMode').value,m=el('filterMonth').value,d=el('filterDay').value;if(mode==='specificDay')return rows.filter(r=>r.time.slice(5,7)===m&&r.time.slice(8,10)===d);if(mode==='specificMonth')return rows.filter(r=>r.time.slice(5,7)===m);return rows}
+async function generateReport(){if(!selected)return showStatus('dataStatus','地点を選択してください。','warn');const start=el('startDate').value,end=el('endDate').value;if(!start||!end)return showStatus('dataStatus','開始日と終了日を指定してください。','warn');if(start>end)return showStatus('dataStatus','開始日は終了日以前にしてください。','warn');const v=vars();const hv=hourlyVars();if(!v.length&&!hv.length)return showStatus('dataStatus','取得する変数を1つ以上選んでください。','warn');showStatus('dataStatus','Open-Meteoから履歴気象データを取得中...');try{const params=new URLSearchParams({latitude:selected.latitude,longitude:selected.longitude,start_date:start,end_date:end,timezone:el('timezone').value,temperature_unit:el('temperatureUnit').value,wind_speed_unit:el('windUnit').value,precipitation_unit:'mm'});if(v.length)params.set('daily',v.join(','));if(hv.length)params.set('hourly',hv.join(','));const res=await fetch(`${ARCHIVE_URL}?${params}`);if(!res.ok)throw new Error(`${res.status} ${(await res.text()).slice(0,160)}`);const data=await res.json();if(data.error)throw new Error(data.reason||'API error');if(!data.daily||!data.daily.time)throw new Error('日別データが返されませんでした。');lastDailyUnits=data.daily_units||{};lastHourlyUnits=data.hourly_units||{};rawRows=normalize(data.daily);viewRows=applyFilter(rawRows);hourlyRows=data.hourly&&data.hourly.time?normalize(data.hourly):[];hourlyViewRows=applyHourlyFilter(hourlyRows);if(!viewRows.length)return showStatus('dataStatus','指定した抽出条件に一致する日別データがありません。日付範囲や月日を確認してください。','warn');renderReport(data,start,end,v,hv);showStatus('dataStatus',`取得完了: 日別 ${rawRows.length.toLocaleString('ja-JP')}日分 / 表示 ${viewRows.length.toLocaleString('ja-JP')}件\n時間別 ${hourlyRows.length.toLocaleString('ja-JP')}件 / 表示 ${hourlyViewRows.length.toLocaleString('ja-JP')}件`);el('report').classList.remove('hidden');el('report').scrollIntoView({behavior:'smooth',block:'start'})}catch(err){showStatus('dataStatus','データ取得に失敗しました: '+err.message+'\n終了日が未来日を含んでいないか確認してください。','error')}}
+function applyHourlyFilter(rows){const mode=el('filterMode').value,m=el('filterMonth').value,d=el('filterDay').value;if(mode==='specificDay')return rows.filter(r=>r.time.slice(5,7)===m&&r.time.slice(8,10)===d);if(mode==='specificMonth')return rows.filter(r=>r.time.slice(5,7)===m);return rows}
+function aggregate(rows,keyFn){const map=new Map();for(const r of rows){const k=keyFn(r);if(!map.has(k))map.set(k,[]);map.get(k).push(r)}return Array.from(map.entries()).map(([key,a])=>({key,days:a.length,tempMean:mean(a.map(r=>r.temperature_2m_mean)),tempMax:max(a.map(r=>r.temperature_2m_max)),tempMin:min(a.map(r=>r.temperature_2m_min)),precipSum:sum(a.map(r=>r.precipitation_sum)),rainyDays:a.filter(r=>Number(r.precipitation_sum||0)>=1).length,windMax:max(a.map(r=>r.wind_speed_10m_max)),gustMax:max(a.map(r=>r.wind_gusts_10m_max)),sunshineHours:(()=>{const s=sum(a.map(r=>r.sunshine_duration));return s==null?null:s/3600})()}))}
+function renderReport(data,start,end,v,hv){const modeText=el('filterMode').selectedOptions[0].textContent;const place=[selected.name,selected.admin1,selected.country].filter(Boolean).join(' / ');el('reportTitle').textContent=`${place} 気象レポート`;el('reportMeta').innerHTML=`<span class="pill">期間: ${start}〜${end}</span><span class="pill">表示: ${escapeHtml(modeText)}</span><span class="pill">緯度: ${selected.latitude}</span><span class="pill">経度: ${selected.longitude}</span><span class="pill">TZ: ${escapeHtml(data.timezone||selected.timezone||'—')}</span>`;renderKpis(viewRows);const annual=aggregate(viewRows,r=>r.time.slice(0,4));const monthly=aggregate(viewRows,r=>r.time.slice(0,7));const hourlyAgg=aggregateHourly(hourlyViewRows);makeCharts(annual,monthly,hourlyAgg);el('annualTable').innerHTML=tableAgg(annual,'年');el('monthlyTable').innerHTML=tableAgg(monthly,'月');el('hourlyAggTable').innerHTML=tableHourlyAgg(hourlyAgg);el('dailyTable').innerHTML=tableRows(viewRows,v,lastDailyUnits);el('hourlyTable').innerHTML=tableRows(hourlyViewRows.slice(0,5000),hv,lastHourlyUnits)+(hourlyViewRows.length>5000?'<p class="hint" style="padding:12px">時間別データは件数が多いため、画面表示は先頭5,000件までです。全件はCSV保存してください。</p>':'')}
+function aggregateHourly(rows){
+  const out=[];
+  for(let h=0;h<24;h++){
+    const key=String(h).padStart(2,'0')+':00';
+    const a=rows.filter(r=>Number(r.time.slice(11,13))===h);
+    out.push({
+      key,
+      points:a.length,
+      tempMean:mean(a.map(r=>r.temperature_2m)),
+      tempMax:max(a.map(r=>r.temperature_2m)),
+      tempMin:min(a.map(r=>r.temperature_2m)),
+      humidityMean:mean(a.map(r=>r.relative_humidity_2m)),
+      apparentTempMean:mean(a.map(r=>r.apparent_temperature)),
+      precipMean:mean(a.map(r=>r.precipitation)),
+      rainMean:mean(a.map(r=>r.rain)),
+      cloudCoverMean:mean(a.map(r=>r.cloud_cover)),
+      pressureMean:mean(a.map(r=>r.pressure_msl)),
+      windMean:mean(a.map(r=>r.wind_speed_10m)),
+      gustMean:mean(a.map(r=>r.wind_gusts_10m)),
+      radiationMean:mean(a.map(r=>r.shortwave_radiation))
+    })
+  }
+  return out
+}
+function renderKpis(rows){const tUnit=lastDailyUnits.temperature_2m_mean||(el('temperatureUnit').value==='fahrenheit'?'°F':'°C');const wUnit=lastDailyUnits.wind_speed_10m_max||el('windUnit').value;const items=[['表示件数',`${rows.length.toLocaleString('ja-JP')} 件`],['平均気温',`${fmt(mean(rows.map(r=>r.temperature_2m_mean)))} ${tUnit}`],['最高気温 最大',`${fmt(max(rows.map(r=>r.temperature_2m_max)))} ${lastDailyUnits.temperature_2m_max||tUnit}`],['最低気温 最小',`${fmt(min(rows.map(r=>r.temperature_2m_min)))} ${lastDailyUnits.temperature_2m_min||tUnit}`],['総降水量',`${fmt(sum(rows.map(r=>r.precipitation_sum)))} ${lastDailyUnits.precipitation_sum||'mm'}`],['降水日数 1mm以上',`${rows.filter(r=>Number(r.precipitation_sum||0)>=1).length.toLocaleString('ja-JP')} 日`],['最大風速',`${fmt(max(rows.map(r=>r.wind_speed_10m_max)))} ${wUnit}`],['総日照時間',(()=>{const s=sum(rows.map(r=>r.sunshine_duration));return s==null?'—':`${fmt(s/3600)} 時間`})()]];el('kpis').innerHTML=items.map(([l,v])=>`<div class="kpi"><div class="label">${l}</div><div class="value">${v}</div></div>`).join('')}
+function chartOptions(){return{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},plugins:{tooltip:{enabled:true,backgroundColor:'rgba(15,23,42,.92)',padding:12,titleFont:{weight:'bold'},callbacks:{label:ctx=>`${ctx.dataset.label}: ${fmt(ctx.parsed.y,1)}`}},legend:{position:'bottom'}},scales:{x:{ticks:{maxTicksLimit:10}},y:{beginAtZero:false}}}}
+function destroyCharts(){charts.forEach(c=>c.destroy());charts=[]}
+function makeCharts(annual,monthly,hourlyAgg){destroyCharts();const tUnit=lastDailyUnits.temperature_2m_mean||'℃',pUnit=lastDailyUnits.precipitation_sum||'mm';const htUnit=lastHourlyUnits.temperature_2m||tUnit,hpUnit=lastHourlyUnits.precipitation||pUnit;const yCfg={type:'bar',data:{labels:annual.map(r=>r.key),datasets:[{type:'line',label:`平均気温 ${tUnit}`,data:annual.map(r=>r.tempMean),tension:.28,yAxisID:'y'},{type:'bar',label:`総降水量 ${pUnit}`,data:annual.map(r=>r.precipSum),yAxisID:'y1'}]},options:{...chartOptions(),scales:{x:{ticks:{maxTicksLimit:12}},y:{position:'left'},y1:{position:'right',grid:{drawOnChartArea:false}}}}};const mCfg={type:'bar',data:{labels:monthly.map(r=>r.key),datasets:[{type:'line',label:`平均気温 ${tUnit}`,data:monthly.map(r=>r.tempMean),tension:.28,yAxisID:'y'},{type:'bar',label:`総降水量 ${pUnit}`,data:monthly.map(r=>r.precipSum),yAxisID:'y1'}]},options:{...chartOptions(),scales:{x:{ticks:{maxTicksLimit:12}},y:{position:'left'},y1:{position:'right',grid:{drawOnChartArea:false}}}}};const tempCfg={type:'line',data:{labels:viewRows.map(r=>r.time),datasets:[{label:`平均気温 ${tUnit}`,data:viewRows.map(r=>r.temperature_2m_mean),tension:.25,pointRadius:viewRows.length<=40?4:1}]},options:chartOptions()};const rainCfg={type:'bar',data:{labels:viewRows.map(r=>r.time),datasets:[{label:`降水量 ${pUnit}`,data:viewRows.map(r=>r.precipitation_sum)}]},options:chartOptions()};const hodCfg={type:'line',data:{labels:hourlyAgg.map(r=>r.key),datasets:[{label:`平均気温 ${htUnit}`,data:hourlyAgg.map(r=>r.tempMean),tension:.28,pointRadius:3},{label:`最高気温 ${htUnit}`,data:hourlyAgg.map(r=>r.tempMax),tension:.28,pointRadius:3},{label:`最低気温 ${htUnit}`,data:hourlyAgg.map(r=>r.tempMin),tension:.28,pointRadius:3}]},options:{...chartOptions(),scales:{x:{ticks:{maxTicksLimit:24}},y:{position:'left'}}}};const hourlySample=sampleSeries(hourlyViewRows,2000);const hourlyTempCfg={type:'line',data:{labels:hourlySample.map(r=>r.time),datasets:[{label:`時間別 気温 ${htUnit}`,data:hourlySample.map(r=>r.temperature_2m),tension:.18,pointRadius:hourlySample.length<=240?2:0}]},options:chartOptions()};charts.push(new Chart(el('yearChart'),yCfg),new Chart(el('monthChart'),mCfg),new Chart(el('tempChart'),tempCfg),new Chart(el('rainChart'),rainCfg),new Chart(el('hourOfDayChart'),hodCfg),new Chart(el('hourlyTempChart'),hourlyTempCfg),new Chart(el('printYearChart'),yCfg),new Chart(el('printTempChart'),tempCfg))}
+function sampleSeries(rows,maxPoints){if(rows.length<=maxPoints)return rows;const step=Math.ceil(rows.length/maxPoints);return rows.filter((_,i)=>i%step===0)}
+function tableAgg(rows,keyLabel){return `<table><thead><tr><th>${keyLabel}</th><th>件数</th><th>平均気温</th><th>最高気温</th><th>最低気温</th><th>総降水量</th><th>降水日数</th><th>最大風速</th><th>最大瞬間風速</th><th>日照時間h</th></tr></thead><tbody>`+rows.map(r=>`<tr><td>${r.key}</td><td>${r.days}</td><td>${fmt(r.tempMean)}</td><td>${fmt(r.tempMax)}</td><td>${fmt(r.tempMin)}</td><td>${fmt(r.precipSum)}</td><td>${r.rainyDays}</td><td>${fmt(r.windMax)}</td><td>${fmt(r.gustMax)}</td><td>${fmt(r.sunshineHours)}</td></tr>`).join('')+`</tbody></table>`}
+function tableRows(rows,v,units={}){const hs=['time',...v];return `<table><thead><tr>${hs.map(h=>`<th>${h==='time'?'日時':LABELS[h]||h}<br><span class="small">${units[h]||''}</span></th>`).join('')}</tr></thead><tbody>`+rows.map(r=>`<tr>${hs.map(h=>`<td>${h==='time'?r[h]:fmt(r[h])}</td>`).join('')}</tr>`).join('')+`</tbody></table>`}
+function tableHourlyAgg(rows){return `<table><thead><tr><th>時間帯</th><th>件数</th><th>平均気温</th><th>最高気温</th><th>最低気温</th><th>平均湿度</th><th>平均体感温度</th><th>平均降水量</th><th>平均雨量</th><th>平均雲量</th><th>平均気圧</th><th>平均風速</th><th>平均瞬間風速</th><th>平均短波放射</th></tr></thead><tbody>`+rows.map(r=>`<tr><td>${r.key}</td><td>${r.points}</td><td>${fmt(r.tempMean)}</td><td>${fmt(r.tempMax)}</td><td>${fmt(r.tempMin)}</td><td>${fmt(r.humidityMean)}</td><td>${fmt(r.apparentTempMean)}</td><td>${fmt(r.precipMean,2)}</td><td>${fmt(r.rainMean,2)}</td><td>${fmt(r.cloudCoverMean)}</td><td>${fmt(r.pressureMean)}</td><td>${fmt(r.windMean)}</td><td>${fmt(r.gustMean)}</td><td>${fmt(r.radiationMean)}</td></tr>`).join('')+`</tbody></table>`}
+function downloadCsv(){if(!viewRows.length)return;const v=vars();const hs=['time',...v];const csv=[hs.join(','),...viewRows.map(r=>hs.map(h=>JSON.stringify(r[h]??'')).join(','))].join('\n');downloadBlob(csv,'weather_report_daily_data.csv','text/csv;charset=utf-8')}
+function downloadHourlyCsv(){if(!hourlyViewRows.length)return;const v=hourlyVars();const hs=['time',...v];const csv=[hs.join(','),...hourlyViewRows.map(r=>hs.map(h=>JSON.stringify(r[h]??'')).join(','))].join('\n');downloadBlob(csv,'weather_report_hourly_data.csv','text/csv;charset=utf-8')}
+function downloadHtml(){downloadBlob(document.documentElement.outerHTML,'open_meteo_weather_report.html','text/html;charset=utf-8')}
+function downloadBlob(content,name,type){const blob=new Blob([content],{type});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;a.click();URL.revokeObjectURL(a.href)}
+function sample(){el('placeQuery').value='Sydney';el('periodPreset').value='10y';applyPreset();el('filterMode').value='specificDay';el('filterMonth').value='10';el('filterDay').value='31';searchPlaces()}
+initSelectors();applyPreset();
+el('periodPreset').addEventListener('change',applyPreset);
+el('searchBtn').addEventListener('click',searchPlaces);
+el('placeQuery').addEventListener('keydown',e=>{if(e.key==='Enter')searchPlaces()});
+el('generateBtn').addEventListener('click',generateReport);
+el('sampleBtn').addEventListener('click',sample);
+el('downloadCsvBtn').addEventListener('click',downloadCsv);
+el('downloadHourlyCsvBtn').addEventListener('click',downloadHourlyCsv);
+el('downloadHtmlBtn').addEventListener('click',downloadHtml);
+el('printBtn').addEventListener('click',()=>window.print());
+searchPlaces();
+</script>
+</body>
+</html>
