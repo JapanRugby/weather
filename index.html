@@ -269,7 +269,7 @@ function vars(){return Array.from(document.querySelectorAll('.dailyVar:checked')
 function hourlyVars(){return Array.from(document.querySelectorAll('.hourlyVar:checked')).map(x=>x.value)}
 function normalize(daily){return daily.time.map((t,i)=>{const r={time:t};Object.keys(daily).forEach(k=>{if(k!=='time')r[k]=daily[k][i]});return r})}
 function applyFilter(rows){const mode=el('filterMode').value,m=el('filterMonth').value,d=el('filterDay').value;if(mode==='specificDay')return rows.filter(r=>r.time.slice(5,7)===m&&r.time.slice(8,10)===d);if(mode==='specificMonth')return rows.filter(r=>r.time.slice(5,7)===m);return rows}
-async function generateReport(){if(!selected)return showStatus('dataStatus','地点を選択してください。','warn');const start=el('startDate').value,end=el('endDate').value;if(!start||!end)return showStatus('dataStatus','開始日と終了日を指定してください。','warn');if(start>end)return showStatus('dataStatus','開始日は終了日以前にしてください。','warn');const v=vars();const hv=hourlyVars();if(!v.length&&!hv.length)return showStatus('dataStatus','取得する変数を1つ以上選んでください。','warn');showStatus('dataStatus','Open-Meteoから履歴気象データを取得中...');try{const params=new URLSearchParams({latitude:selected.latitude,longitude:selected.longitude,start_date:start,end_date:end,timezone:el('timezone').value,temperature_unit:el('temperatureUnit').value,wind_speed_unit:el('windUnit').value,precipitation_unit:'mm'});if(v.length)params.set('daily',v.join(','));if(hv.length)params.set('hourly',hv.join(','));const res=await fetch(`${ARCHIVE_URL}?${params}`);if(!res.ok)throw new Error(`${res.status} ${(await res.text()).slice(0,160)}`);const data=await res.json();if(data.error)throw new Error(data.reason||'API error');if(!data.daily||!data.daily.time)throw new Error('日別データが返されませんでした。');lastDailyUnits=data.daily_units||{};lastHourlyUnits=data.hourly_units||{};rawRows=normalize(data.daily);viewRows=applyFilter(rawRows);hourlyRows=data.hourly&&data.hourly.time?normalize(data.hourly):[];hourlyViewRows=applyHourlyFilter(hourlyRows);if(!viewRows.length)return showStatus('dataStatus','指定した抽出条件に一致する日別データがありません。日付範囲や月日を確認してください。','warn');renderReport(data,start,end,v,hv);showStatus('dataStatus',`取得完了: 日別 ${rawRows.length.toLocaleString('ja-JP')}日分 / 表示 ${viewRows.length.toLocaleString('ja-JP')}件\n時間別 ${hourlyRows.length.toLocaleString('ja-JP')}件 / 表示 ${hourlyViewRows.length.toLocaleString('ja-JP')}件`);el('report').classList.remove('hidden');el('report').scrollIntoView({behavior:'smooth',block:'start'})}catch(err){showStatus('dataStatus','データ取得に失敗しました: '+err.message+'\n日付範囲、ネット接続、または選択した変数を確認してください。','error')}}
+async function generateReport(){if(!selected)return showStatus('dataStatus','地点を選択してください。','warn');const start=el('startDate').value,end=el('endDate').value;if(!start||!end)return showStatus('dataStatus','開始日と終了日を指定してください。','warn');if(start>end)return showStatus('dataStatus','開始日は終了日以前にしてください。','warn');const v=vars();const hv=hourlyVars();if(!v.length&&!hv.length)return showStatus('dataStatus','取得する変数を1つ以上選んでください。','warn');showStatus('dataStatus','Open-Meteoから履歴気象データを取得中...');try{const params=new URLSearchParams({latitude:selected.latitude,longitude:selected.longitude,start_date:start,end_date:end,timezone:el('timezone').value,temperature_unit:el('temperatureUnit').value,wind_speed_unit:el('windUnit').value,precipitation_unit:'mm'});if(v.length)params.set('daily',v.join(','));if(hv.length)params.set('hourly',hv.join(','));const res=await fetch(`${ARCHIVE_URL}?${params}`);if(!res.ok)throw new Error(`${res.status} ${(await res.text()).slice(0,160)}`);const data=await res.json();if(data.error)throw new Error(data.reason||'API error');if(!data.daily||!data.daily.time)throw new Error('日別データが返されませんでした。');lastDailyUnits=data.daily_units||{};lastHourlyUnits=data.hourly_units||{};rawRows=normalize(data.daily);viewRows=applyFilter(rawRows);hourlyRows=data.hourly&&data.hourly.time?normalize(data.hourly):[];hourlyViewRows=applyHourlyFilter(hourlyRows);if(!viewRows.length)return showStatus('dataStatus','指定した抽出条件に一致する日別データがありません。日付範囲や月日を確認してください。','warn');destroyCharts();renderReport(data,start,end,v,hv);showStatus('dataStatus',`取得完了: 日別 ${rawRows.length.toLocaleString('ja-JP')}日分 / 表示 ${viewRows.length.toLocaleString('ja-JP')}件\n時間別 ${hourlyRows.length.toLocaleString('ja-JP')}件 / 表示 ${hourlyViewRows.length.toLocaleString('ja-JP')}件`);el('report').classList.remove('hidden');el('report').scrollIntoView({behavior:'smooth',block:'start'})}catch(err){showStatus('dataStatus','データ取得に失敗しました: '+err.message+'\n日付範囲、ネット接続、または選択した変数を確認してください。','error')}}
 function applyHourlyFilter(rows){const mode=el('filterMode').value,m=el('filterMonth').value,d=el('filterDay').value;if(mode==='specificDay')return rows.filter(r=>r.time.slice(5,7)===m&&r.time.slice(8,10)===d);if(mode==='specificMonth')return rows.filter(r=>r.time.slice(5,7)===m);return rows}
 function aggregate(rows,keyFn){const map=new Map();for(const r of rows){const k=keyFn(r);if(!map.has(k))map.set(k,[]);map.get(k).push(r)}return Array.from(map.entries()).map(([key,a])=>({key,days:a.length,tempMean:mean(a.map(r=>r.temperature_2m_mean)),tempMax:max(a.map(r=>r.temperature_2m_max)),tempMin:min(a.map(r=>r.temperature_2m_min)),precipSum:sum(a.map(r=>r.precipitation_sum)),rainyDays:a.filter(r=>Number(r.precipitation_sum||0)>=1).length,windMax:max(a.map(r=>r.wind_speed_10m_max)),gustMax:max(a.map(r=>r.wind_gusts_10m_max)),sunshineHours:(()=>{const s=sum(a.map(r=>r.sunshine_duration));return s==null?null:s/3600})()}))}
 
@@ -386,7 +386,28 @@ function renderKpis(rows){
   el('kpis').innerHTML=items.map(([l,v])=>`<div class="kpi"><div class="label">${l}</div><div class="value">${v}</div></div>`).join('')
 }
 function chartOptions(){return{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},plugins:{tooltip:{enabled:true,backgroundColor:'rgba(15,23,42,.92)',padding:12,titleFont:{weight:'bold'},callbacks:{label:ctx=>`${ctx.dataset.label}: ${fmt(ctx.parsed.y,1)}`}},legend:{position:'bottom'}},scales:{x:{ticks:{maxTicksLimit:10}},y:{beginAtZero:false}}}}
-function destroyCharts(){charts.filter(Boolean).forEach(c=>c.destroy());charts=[]}
+function destroyCharts(){
+  // v4.4: robustly destroy every Chart.js instance before reusing canvases.
+  try{
+    if(window.Chart && Chart.instances){
+      Object.values(Chart.instances).forEach(c=>{
+        try{ if(c && typeof c.destroy==='function') c.destroy(); }catch(e){}
+      });
+    }
+  }catch(e){}
+  try{
+    charts.filter(Boolean).forEach(c=>{
+      try{ if(c && typeof c.destroy==='function') c.destroy(); }catch(e){}
+    });
+  }catch(e){}
+  charts=[];
+  document.querySelectorAll('canvas').forEach(canvas=>{
+    try{
+      const existing=Chart.getChart(canvas);
+      if(existing) existing.destroy();
+    }catch(e){}
+  });
+}
 function cloneChartConfig(cfg){return JSON.parse(JSON.stringify(cfg))}
 function makeCharts(annual,monthly,hourlyAgg,chartRows,humiditySeries){
   destroyCharts();
@@ -450,6 +471,7 @@ function makeCharts(annual,monthly,hourlyAgg,chartRows,humiditySeries){
     new Chart(el('pdfYearChart'),cloneChartConfig(yCfg)),
     new Chart(el('pdfHourChart'),cloneChartConfig(hodCfg))
   )
+  charts=charts.filter(Boolean);
 }
 function sampleSeries(rows,maxPoints){if(rows.length<=maxPoints)return rows;const step=Math.ceil(rows.length/maxPoints);return rows.filter((_,i)=>i%step===0)}
 function tableAgg(rows,keyLabel){return `<table><thead><tr><th>${keyLabel}</th><th>${tr('count')}</th><th>${tr('avgTemp')}</th><th>${tr('maxTempShort')}</th><th>${tr('minTempShort')}</th><th>${tr('totalPrecip')}</th><th>${tr('rainyDays')}</th><th>${tr('maxWind')}</th><th>${tr('maxGust')}</th><th>${tr('sunshineHours')}</th></tr></thead><tbody>`+rows.map(r=>`<tr><td>${r.key}</td><td>${r.days}</td><td>${fmt(r.tempMean)}</td><td>${fmt(r.tempMax)}</td><td>${fmt(r.tempMin)}</td><td>${fmt(r.precipSum)}</td><td>${r.rainyDays}</td><td>${fmt(r.windMax)}</td><td>${fmt(r.gustMax)}</td><td>${fmt(r.sunshineHours)}</td></tr>`).join('')+`</tbody></table>`}
