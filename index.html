@@ -220,9 +220,10 @@ main{margin-top:0!important}
       <div class="chartCard"><h3>表示データ：平均気温</h3><div class="chartBox tall"><canvas id="tempChart"></canvas></div></div>
       <div class="chartCard"><h3>表示データ：降水量</h3><div class="chartBox tall"><canvas id="rainChart"></canvas></div></div>
       <div class="chartCard"><h3>時間帯別 気温（平均・最高・最低）</h3><div class="chartBox tall"><canvas id="hourOfDayChart"></canvas></div></div>
-      <div class="chartCard"><h3>時間別データ：気温</h3><div class="chartBox tall"><canvas id="hourlyTempChart"></canvas></div></div>
       <div class="chartCard"><h3>平均湿度グラフ</h3><div class="chartBox tall"><canvas id="humidityChart"></canvas></div></div>
       <div class="chartCard"><h3>時間帯別 湿度（平均・最高・最低）</h3><div class="chartBox tall"><canvas id="hourOfDayHumidityChart"></canvas></div></div>
+      <div class="chartCard"><h3>時間帯別コンディション：気温・湿度・体感温度</h3><div class="chartBox tall"><canvas id="hourOfDayConditionChart"></canvas></div></div>
+      <div class="chartCard"><h3>時間帯別 風速・瞬間風速</h3><div class="chartBox tall"><canvas id="hourOfDayWindChart"></canvas></div></div>
     </div>
   </section>
 
@@ -430,11 +431,6 @@ function makeCharts(annual,monthly,hourlyAgg,chartRows,humiditySeries){
     {label:`${tr('minHumidity')} ${hUnit}`,data:hourlyAgg.map(r=>r.humidityMin),tension:.28,pointRadius:3}
   ]},options:{...chartOptions(),scales:{x:{ticks:{maxTicksLimit:24}},y:{position:'left',suggestedMin:0,suggestedMax:100}}}};
 
-  const hourlySample=sampleSeries(hourlyViewRows,2000);
-  const hourlyTempCfg={type:'line',data:{labels:hourlySample.map(r=>r.time),datasets:[
-    {label:`${tr('hourlyTemp')} ${htUnit}`,data:hourlySample.map(r=>r.temperature_2m),tension:.18,pointRadius:hourlySample.length<=240?2:0}
-  ]},options:chartOptions()};
-
   const humidityCfg={type:'line',data:{labels:humiditySeries.map(r=>r.time),datasets:[
     {label:`${displayLabel} ${tr('avgHumidity')} ${hUnit}`,data:humiditySeries.map(r=>r.humidityMean),tension:.25,pointRadius:humiditySeries.length<=60?3:1}
   ]},options:{...chartOptions(),scales:{x:{ticks:{maxTicksLimit:12}},y:{position:'left',suggestedMin:0,suggestedMax:100}}}};
@@ -445,9 +441,10 @@ function makeCharts(annual,monthly,hourlyAgg,chartRows,humiditySeries){
     new Chart(el('tempChart'),cloneChartConfig(tempCfg)),
     new Chart(el('rainChart'),cloneChartConfig(rainCfg)),
     new Chart(el('hourOfDayChart'),cloneChartConfig(hodCfg)),
-    new Chart(el('hourlyTempChart'),cloneChartConfig(hourlyTempCfg)),
     (el('humidityChart')?new Chart(el('humidityChart'),cloneChartConfig(humidityCfg)):null),
     (el('hourOfDayHumidityChart')?new Chart(el('hourOfDayHumidityChart'),cloneChartConfig(hodHumidityCfg)):null),
+    (el('hourOfDayConditionChart')?new Chart(el('hourOfDayConditionChart'),cloneChartConfig(conditionCfg)):null),
+    (el('hourOfDayWindChart')?new Chart(el('hourOfDayWindChart'),cloneChartConfig(windCfg)):null),
     new Chart(el('printYearChart'),cloneChartConfig(yCfg)),
     new Chart(el('printTempChart'),cloneChartConfig(tempCfg)),
     new Chart(el('pdfYearChart'),cloneChartConfig(yCfg)),
@@ -504,7 +501,7 @@ const I18N={
     year:'年',month:'月',count:'件数',displayCount:'表示件数',records:'件',days:'日',hours:'時間',
     avgTemp:'平均気温',maxTemp:'最高気温 最大',minTemp:'最低気温 最小',maxTempShort:'最高気温',minTempShort:'最低気温',
     totalPrecip:'総降水量',precip:'降水量',rainyDays:'降水日数',maxWind:'最大風速',maxGust:'最大瞬間風速',sunshine:'総日照時間',sunshineHours:'日照時間h',
-    avgHumidity:'平均湿度',maxHumidity:'最高湿度',minHumidity:'最低湿度',avgApparentTemp:'平均体感温度',avgPrecip:'平均降水量',avgRain:'平均雨量',avgCloud:'平均雲量',avgPressure:'平均気圧',avgWind:'平均風速',avgGust:'平均瞬間風速',avgRadiation:'平均短波放射',
+    avgHumidity:'平均湿度',maxHumidity:'最高湿度',minHumidity:'最低湿度',avgApparentTemp:'平均体感温度',avgPrecip:'平均降水量',avgRain:'平均雨量',avgCloud:'平均雲量',avgPressure:'平均気圧',avgWind:'平均風速',avgGust:'平均瞬間風速',avgRadiation:'平均短波放射',conditionChart:'時間帯別コンディション：気温・湿度・体感温度',windChart:'時間帯別 風速・瞬間風速',apparentTemp:'体感温度',windSpeed:'風速',windGusts:'瞬間風速',
     hourOfDay:'時間帯',hourlyTemp:'時間別 気温',monthly:'月別',byYear:'年別',monthSuffix:'月',daySuffix:'日',
     hourlyLimit:'時間別データは件数が多いため、画面表示は先頭5,000件までです。全件はCSV保存してください。'
   },
@@ -521,7 +518,7 @@ const I18N={
     year:'Year',month:'Month',count:'Count',displayCount:'Displayed records',records:'records',days:'days',hours:'hours',
     avgTemp:'Average temperature',maxTemp:'Highest temperature',minTemp:'Lowest temperature',maxTempShort:'Max temperature',minTempShort:'Min temperature',
     totalPrecip:'Total precipitation',precip:'Precipitation',rainyDays:'Rainy days',maxWind:'Max wind speed',maxGust:'Max wind gusts',sunshine:'Total sunshine',sunshineHours:'Sunshine h',
-    avgHumidity:'Average humidity',maxHumidity:'Max humidity',minHumidity:'Min humidity',avgApparentTemp:'Avg apparent temp',avgPrecip:'Avg precipitation',avgRain:'Avg rain',avgCloud:'Avg cloud cover',avgPressure:'Avg pressure',avgWind:'Avg wind speed',avgGust:'Avg gusts',avgRadiation:'Avg radiation',
+    avgHumidity:'Average humidity',maxHumidity:'Max humidity',minHumidity:'Min humidity',avgApparentTemp:'Avg apparent temp',avgPrecip:'Avg precipitation',avgRain:'Avg rain',avgCloud:'Avg cloud cover',avgPressure:'Avg pressure',avgWind:'Avg wind speed',avgGust:'Avg gusts',avgRadiation:'Avg radiation',conditionChart:'Hourly Conditions: Temperature, Humidity & Apparent Temperature',windChart:'Hour-of-day Wind Speed & Gusts',apparentTemp:'Apparent temperature',windSpeed:'Wind speed',windGusts:'Wind gusts',
     hourOfDay:'Hour of day',hourlyTemp:'Hourly temperature',monthly:'Monthly',byYear:'by year',monthSuffix:'',daySuffix:'', 
     hourlyLimit:'Hourly data is large, so the table shows the first 5,000 rows. Use CSV export for all rows.'
   }
@@ -551,7 +548,11 @@ function setLang(lang){
       .replace('取得する日別変数',tr('dailyVars')).replace('取得する時間別変数',tr('hourlyVars'))
       .replace('時間帯別 気温（平均・最高・最低）', currentLang==='ja'?'時間帯別 気温（平均・最高・最低）':'Hour-of-day temperature (avg / max / min)')
       .replace('平均湿度グラフ', currentLang==='ja'?'平均湿度グラフ':'Average humidity chart')
-      .replace('時間帯別 湿度（平均・最高・最低）', currentLang==='ja'?'時間帯別 湿度（平均・最高・最低）':'Hour-of-day humidity (avg / max / min)');
+      .replace('時間帯別 湿度（平均・最高・最低）', currentLang==='ja'?'時間帯別 湿度（平均・最高・最低）':'Hour-of-day humidity (avg / max / min)')
+      .replace('時間帯別コンディション：気温・湿度・体感温度',tr('conditionChart'))
+      .replace('Hourly Conditions: Temperature, Humidity & Apparent Temperature',tr('conditionChart'))
+      .replace('時間帯別 風速・瞬間風速',tr('windChart'))
+      .replace('Hour-of-day Wind Speed & Gusts',tr('windChart'));
   });
   const fm=el('filterMode');
   if(fm){ fm.options[0].textContent=tr('all'); fm.options[1].textContent=tr('specificDay'); fm.options[2].textContent=tr('specificMonth');}
