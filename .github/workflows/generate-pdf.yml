@@ -1,0 +1,79 @@
+name: Generate Weather PDF
+
+on:
+  schedule:
+    # 06:00, 12:00, 18:00 JST (UTC 21:00 previous day, 03:00, 09:00)
+    - cron: "0 21 * * *"
+    - cron: "0 3 * * *"
+    - cron: "0 9 * * *"
+  workflow_dispatch:
+    inputs:
+      name:
+        description: "English location name"
+        required: true
+        default: "Miyazaki"
+      name_ja:
+        description: "Japanese location name"
+        required: true
+        default: "宮崎市"
+      latitude:
+        description: "Latitude"
+        required: true
+        default: "31.9077"
+      longitude:
+        description: "Longitude"
+        required: true
+        default: "131.4202"
+      timezone:
+        description: "IANA timezone"
+        required: true
+        default: "Asia/Tokyo"
+      mode:
+        description: "auto, today, or tomorrow"
+        required: true
+        default: "auto"
+
+permissions:
+  contents: read
+
+jobs:
+  pdf:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Start static server
+        run: |
+          npm start > /tmp/weather-site.log 2>&1 &
+          npx wait-on http://127.0.0.1:4173
+
+      - name: Generate fixed-layout PDF
+        env:
+          WEATHER_NAME: ${{ inputs.name || 'Miyazaki' }}
+          WEATHER_NAME_JA: ${{ inputs.name_ja || '宮崎市' }}
+          WEATHER_LAT: ${{ inputs.latitude || '31.9077' }}
+          WEATHER_LON: ${{ inputs.longitude || '131.4202' }}
+          WEATHER_TIMEZONE: ${{ inputs.timezone || 'Asia/Tokyo' }}
+          WEATHER_MODE: ${{ inputs.mode || 'auto' }}
+          PDF_OUTPUT: pdf/hourly-weather.pdf
+        run: npm run pdf
+
+      - name: Upload PDF artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: hourly-weather-pdf-${{ github.run_number }}
+          path: pdf/hourly-weather.pdf
+          if-no-files-found: error
