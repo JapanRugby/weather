@@ -1,6 +1,6 @@
 {
   "name": "hourly-weather-pdf",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "private": true,
   "description": "Searchable city and stadium hourly weather report with fixed-layout PDF for GitHub Pages",
   "scripts": {

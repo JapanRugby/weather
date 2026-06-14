@@ -542,9 +542,10 @@
   }
 
   function renderLineChart(container, labels, values, options) {
-    const width = 620;
-    const height = 170;
-    const padding = { left: 30, right: 15, top: 23, bottom: 28 };
+    // A wide viewBox matches the A4 landscape chart area and avoids vertical squeezing in PDF output.
+    const width = 700;
+    const height = 140;
+    const padding = { left: 34, right: 16, top: 20, bottom: 24 };
     const minValue = Math.min(...values);
     const maxValue = Math.max(...values);
     const spread = Math.max(maxValue - minValue, 1);
@@ -563,7 +564,7 @@
     const valuesSvg = values.map((value, index) => `<circle cx="${x(index)}" cy="${y(value)}" r="3" fill="white" stroke="${options.stroke}" stroke-width="2"/><text x="${x(index)}" y="${y(value)-8}" text-anchor="middle" class="chart-value">${value.toFixed(options.decimals)}${options.unit}</text>`).join("");
 
     container.innerHTML = `
-      <svg viewBox="0 0 ${width} ${height}" role="img" aria-hidden="true" preserveAspectRatio="none">
+      <svg viewBox="0 0 ${width} ${height}" role="img" aria-hidden="true" preserveAspectRatio="xMidYMid meet">
         ${gridLines}
         <polygon points="${areaPoints}" fill="${options.fill}"/>
         <polyline points="${points}" fill="none" stroke="${options.stroke}" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
