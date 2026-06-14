@@ -80,6 +80,9 @@ button { cursor: pointer; }
 }
 .search-row input:focus { border-color: var(--blue); box-shadow: 0 0 0 4px rgba(46,125,241,.1); background: white; }
 .hint { margin: 7px 0 0; color: var(--muted); font-size: 11px; }
+.search-attribution { margin: 4px 0 0; color: var(--muted); font-size: 10px; }
+.search-attribution a { color: var(--blue); text-decoration: none; }
+.search-attribution a:hover { text-decoration: underline; }
 
 .search-results {
   position: absolute;
@@ -109,6 +112,10 @@ button { cursor: pointer; }
 .search-result strong { display: block; font-size: 14px; }
 .search-result span { display: block; margin-top: 3px; color: var(--muted); font-size: 11px; }
 .search-result small { align-self: center; color: var(--blue); }
+.search-result-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 5px; }
+.search-result-badge { display: inline-flex; font-style: normal; align-items: center; min-height: 18px; padding: 2px 7px; border-radius: 999px; color: #22547e; background: #e8f3ff; font-size: 9px; font-weight: 800; letter-spacing: .02em; }
+.search-result-badge.poi { color: #684b16; background: #fff2cf; }
+.search-result-source { color: var(--muted); font-size: 9px; }
 
 .button, .mode-button {
   height: 40px;

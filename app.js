@@ -18,6 +18,10 @@
     forecastEndHour: 20,
     geocodingEndpoint: "https://geocoding-api.open-meteo.com/v1/search",
     reverseGeocodingEndpoint: "https://geocoding-api.open-meteo.com/v1/get",
+    poiSearchEndpoint: "https://nominatim.openstreetmap.org/search",
+    poiSearchEnabled: true,
+    poiCacheHours: 168,
+    poiMinimumIntervalMs: 1100,
     forecastEndpoint: "https://api.open-meteo.com/v1/forecast"
   };
 
@@ -64,7 +68,9 @@
     mode: new URLSearchParams(location.search).get("mode") || readJson("weather.mode") || "auto",
     forecast: null,
     isSearching: false,
-    searchTimer: null
+    searchTimer: null,
+    searchSequence: 0,
+    lastPoiRequestAt: 0
   };
 
   const el = {};
@@ -79,7 +85,7 @@
       "status-message", "weather-report", "loading-overlay", "location-en", "location-ja", "target-date",
       "update-label", "overall-icon", "overall-en", "overall-ja", "temperature-range", "peak-wind",
       "peak-wind-direction", "precipitation-max", "temperature-chart", "wind-chart", "hourly-grid",
-      "timezone-label", "issued-at", "generated-at"
+      "timezone-label", "issued-at", "generated-at", "source-label"
     ].forEach(id => { el[id] = byId(id); });
 
     bindEvents();
@@ -92,17 +98,21 @@
   }
 
   function bindEvents() {
-    el["search-button"].addEventListener("click", () => searchLocations(el["location-search"].value));
+    el["search-button"].addEventListener("click", () => {
+      clearTimeout(state.searchTimer);
+      searchLocations(el["location-search"].value, { includePlaces: true });
+    });
     el["location-search"].addEventListener("input", event => {
       clearTimeout(state.searchTimer);
       const query = event.target.value.trim();
       if (query.length < 2) return hideSearchResults();
-      state.searchTimer = setTimeout(() => searchLocations(query), 350);
+      state.searchTimer = setTimeout(() => searchLocations(query, { includePlaces: false, silent: true }), 350);
     });
     el["location-search"].addEventListener("keydown", event => {
       if (event.key === "Enter") {
         event.preventDefault();
-        searchLocations(event.currentTarget.value);
+        clearTimeout(state.searchTimer);
+        searchLocations(event.currentTarget.value, { includePlaces: true });
       }
       if (event.key === "Escape") hideSearchResults();
     });
@@ -130,42 +140,170 @@
     });
   }
 
-  async function searchLocations(query) {
+  async function searchLocations(query, { includePlaces = false, silent = false } = {}) {
     const cleaned = query.trim();
     if (cleaned.length < 2) {
-      setStatus("地域名を2文字以上入力してください。", "error");
+      setStatus("地域名・施設名を2文字以上入力してください。", "error");
       return;
     }
-    state.isSearching = true;
-    setStatus("Searching locations / 地域を検索中…");
+    if (state.isSearching && includePlaces) return;
+    const requestId = ++state.searchSequence;
+    if (includePlaces) state.isSearching = true;
+    if (!silent) setStatus(includePlaces ? "Searching locations and venues / 地域・施設を検索中…" : "Searching locations / 地域を検索中…");
     try {
-      const makeUrl = language => {
-        const params = new URLSearchParams({ name: cleaned, count: "8", language, format: "json" });
-        return `${CONFIG.geocodingEndpoint}?${params}`;
-      };
-      const [jaResponse, enResponse] = await Promise.all([
-        fetch(makeUrl("ja")),
-        fetch(makeUrl("en"))
-      ]);
-      if (!jaResponse.ok || !enResponse.ok) throw new Error(`Geocoding API ${jaResponse.status}/${enResponse.status}`);
-      const [jaData, enData] = await Promise.all([jaResponse.json(), enResponse.json()]);
-      const englishById = new Map((enData.results || []).map(item => [item.id, item]));
-      const combined = (jaData.results || []).map(item => ({
-        ...item,
-        nameJa: item.name,
-        nameEn: englishById.get(item.id)?.name || item.name,
-        admin1En: englishById.get(item.id)?.admin1 || item.admin1,
-        countryEn: englishById.get(item.id)?.country || item.country
-      }));
+      const cityPromise = searchOpenMeteoLocations(cleaned).catch(error => {
+        if (!includePlaces) throw error;
+        console.warn("Location search unavailable", error);
+        return [];
+      });
+      const placePromise = includePlaces && CONFIG.poiSearchEnabled
+        ? searchOpenStreetMapPlaces(cleaned).catch(error => {
+            console.warn("Place search unavailable", error);
+            return [];
+          })
+        : Promise.resolve([]);
+      const [cities, places] = await Promise.all([cityPromise, placePromise]);
+      if (requestId !== state.searchSequence) return;
+      const combined = dedupeAndRankSearchResults([...places, ...cities], cleaned);
       renderSearchResults(combined);
-      setStatus(combined.length ? `${combined.length}件の候補を表示しています。` : "該当する地域が見つかりませんでした。", combined.length ? "" : "error");
+      if (!silent || includePlaces) {
+        const message = combined.length
+          ? `${combined.length}件の候補を表示しています。${includePlaces ? " スタジアム・競技場などの施設候補を含みます。" : ""}`
+          : "該当する地域・施設が見つかりませんでした。";
+        setStatus(message, combined.length ? "" : "error");
+      }
     } catch (error) {
       console.error(error);
-      setStatus("地域検索に失敗しました。通信状態を確認してください。", "error");
+      if (requestId !== state.searchSequence) return;
+      if (!silent || includePlaces) setStatus("検索に失敗しました。通信状態を確認してください。", "error");
       hideSearchResults();
     } finally {
-      state.isSearching = false;
+      if (includePlaces) state.isSearching = false;
     }
+  }
+
+  async function searchOpenMeteoLocations(cleaned) {
+    const makeUrl = language => {
+      const params = new URLSearchParams({ name: cleaned, count: "8", language, format: "json" });
+      return `${CONFIG.geocodingEndpoint}?${params}`;
+    };
+    const [jaResponse, enResponse] = await Promise.all([
+      fetch(makeUrl("ja")),
+      fetch(makeUrl("en"))
+    ]);
+    if (!jaResponse.ok || !enResponse.ok) throw new Error(`Geocoding API ${jaResponse.status}/${enResponse.status}`);
+    const [jaData, enData] = await Promise.all([jaResponse.json(), enResponse.json()]);
+    const englishById = new Map((enData.results || []).map(item => [item.id, item]));
+    return (jaData.results || []).map(item => ({
+      ...item,
+      nameJa: item.name,
+      nameEn: englishById.get(item.id)?.name || item.name,
+      admin1En: englishById.get(item.id)?.admin1 || item.admin1,
+      countryEn: englishById.get(item.id)?.country || item.country,
+      provider: "Open-Meteo",
+      resultKind: "location",
+      resultKindEn: "City / Area",
+      resultKindJa: "地域"
+    }));
+  }
+
+  async function searchOpenStreetMapPlaces(cleaned) {
+    const cacheKey = `weather.poiSearch.${cleaned.toLocaleLowerCase()}`;
+    const cached = readJson(cacheKey);
+    const cacheMaxAge = CONFIG.poiCacheHours * 60 * 60 * 1000;
+    if (cached?.savedAt && Date.now() - cached.savedAt < cacheMaxAge && Array.isArray(cached.results)) return cached.results;
+
+    const waitMs = Math.max(0, CONFIG.poiMinimumIntervalMs - (Date.now() - state.lastPoiRequestAt));
+    if (waitMs) await delay(waitMs);
+    state.lastPoiRequestAt = Date.now();
+
+    const params = new URLSearchParams({
+      q: cleaned,
+      format: "jsonv2",
+      addressdetails: "1",
+      namedetails: "1",
+      limit: "10",
+      dedupe: "1",
+      "accept-language": "ja,en"
+    });
+    const response = await fetch(`${CONFIG.poiSearchEndpoint}?${params}`, {
+      headers: { "Accept": "application/json" }
+    });
+    if (!response.ok) throw new Error(`Nominatim ${response.status}`);
+    const data = await response.json();
+    const results = data.map(normalizeOsmSearchResult).filter(Boolean);
+    localStorage.setItem(cacheKey, JSON.stringify({ savedAt: Date.now(), results }));
+    return results;
+  }
+
+  function normalizeOsmSearchResult(item) {
+    const latitude = Number(item.lat);
+    const longitude = Number(item.lon);
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
+    const names = item.namedetails || {};
+    const address = item.address || {};
+    const nameJa = names["name:ja"] || names.name || item.name || firstDisplayNamePart(item.display_name);
+    const nameEn = names["name:en"] || names["official_name:en"] || names.name || item.name || nameJa;
+    const cityJa = address.city || address.town || address.village || address.municipality || address.county || "";
+    const stateJa = address.state || address.province || address.region || "";
+    const countryJa = address.country || "";
+    const placeType = classifyOsmPlace(item);
+    return {
+      id: `osm-${item.osm_type || "place"}-${item.osm_id || item.place_id}`,
+      name: nameEn,
+      nameEn,
+      nameJa,
+      admin1: [cityJa, stateJa].filter((value, index, array) => value && array.indexOf(value) === index).join(" · "),
+      admin1En: [cityJa, stateJa].filter((value, index, array) => value && array.indexOf(value) === index).join(" · "),
+      country: countryJa,
+      countryEn: countryJa,
+      country_code: String(address.country_code || "").toUpperCase(),
+      latitude,
+      longitude,
+      timezone: "auto",
+      provider: "OpenStreetMap",
+      resultKind: "poi",
+      resultKindEn: placeType.en,
+      resultKindJa: placeType.ja,
+      osmCategory: item.category || item.class || "",
+      osmType: item.type || "",
+      importance: Number(item.importance || 0)
+    };
+  }
+
+  function classifyOsmPlace(item) {
+    const haystack = `${item.category || ""} ${item.class || ""} ${item.type || ""} ${item.display_name || ""}`.toLowerCase();
+    if (/stadium|競技場|スタジアム/.test(haystack)) return { en: "Stadium", ja: "スタジアム" };
+    if (/arena|アリーナ/.test(haystack)) return { en: "Arena", ja: "アリーナ" };
+    if (/sports_centre|sports center|sport centre|球場|運動場|体育館/.test(haystack)) return { en: "Sports Venue", ja: "スポーツ施設" };
+    if (/airport|aerodrome|空港/.test(haystack)) return { en: "Airport", ja: "空港" };
+    if (/station|駅/.test(haystack)) return { en: "Station", ja: "駅" };
+    if (/park|公園/.test(haystack)) return { en: "Place", ja: "施設・地点" };
+    return { en: "Place / Venue", ja: "施設・地点" };
+  }
+
+  function dedupeAndRankSearchResults(results, query) {
+    const normalizedQuery = query.toLocaleLowerCase();
+    const unique = new Map();
+    results.forEach(item => {
+      const key = `${Number(item.latitude).toFixed(4)},${Number(item.longitude).toFixed(4)}`;
+      const existing = unique.get(key);
+      if (!existing || searchResultScore(item, normalizedQuery) > searchResultScore(existing, normalizedQuery)) unique.set(key, item);
+    });
+    return [...unique.values()]
+      .sort((a, b) => searchResultScore(b, normalizedQuery) - searchResultScore(a, normalizedQuery))
+      .slice(0, 14);
+  }
+
+  function searchResultScore(item, query) {
+    const names = [item.nameJa, item.nameEn, item.name].filter(Boolean).map(value => String(value).toLocaleLowerCase());
+    let score = Number(item.importance || 0);
+    if (names.some(name => name === query)) score += 10;
+    else if (names.some(name => name.startsWith(query))) score += 6;
+    else if (names.some(name => name.includes(query))) score += 3;
+    if (item.resultKind === "poi") score += 1.5;
+    if (/stadium|arena|sports|スタジアム|競技場|球場|アリーナ/.test(`${item.resultKindEn || ""} ${item.resultKindJa || ""}`.toLowerCase())) score += 2;
+    return score;
   }
 
   function renderSearchResults(results) {
@@ -182,7 +320,10 @@
         ? `${result.nameEn} / ${result.nameJa}`
         : result.nameJa || result.name;
       const subtitle = adminEn && adminEn !== adminJa ? `${adminEn} / ${adminJa}` : (adminJa || adminEn || "—");
-      button.innerHTML = `<div><strong>${escapeHtml(title)}</strong><span>${escapeHtml(subtitle)}</span></div><small>${result.latitude.toFixed(2)}, ${result.longitude.toFixed(2)}</small>`;
+      const kind = [result.resultKindEn, result.resultKindJa].filter(Boolean).join(" / ") || "Location / 地域";
+      const badgeClass = result.resultKind === "poi" ? "poi" : "";
+      const source = result.provider || "Open-Meteo";
+      button.innerHTML = `<div><strong>${escapeHtml(title)}</strong><span>${escapeHtml(subtitle)}</span><div class="search-result-meta"><em class="search-result-badge ${badgeClass}">${escapeHtml(kind)}</em><span class="search-result-source">${escapeHtml(source)}</span></div></div><small>${result.latitude.toFixed(2)}, ${result.longitude.toFixed(2)}</small>`;
       button.addEventListener("click", () => selectLocation(normalizeLocation(result)));
       el["search-results"].appendChild(button);
     });
@@ -340,6 +481,9 @@
 
     el["location-en"].textContent = selected.name || selected.nameJa || "Selected Location";
     el["location-ja"].textContent = selected.nameJa || selected.name || "選択地域";
+    el["source-label"].textContent = selected.provider === "OpenStreetMap"
+      ? "Open-Meteo Weather API · Location © OpenStreetMap contributors"
+      : "Open-Meteo Weather API";
     el["target-date"].textContent = formatDateBilingual(targetDate, timezone);
     el["update-label"].textContent = state.mode === "auto" ? "Auto Update / 自動更新" : state.mode === "today" ? "Today / 今日" : "Tomorrow / 明日";
     el["overall-icon"].textContent = overall.icon;
@@ -474,7 +618,11 @@
       countryCode: result.country_code || "",
       latitude: result.latitude,
       longitude: result.longitude,
-      timezone: result.timezone || "auto"
+      timezone: result.timezone || "auto",
+      provider: result.provider || "Open-Meteo",
+      resultKind: result.resultKind || "location",
+      resultKindEn: result.resultKindEn || "City / Area",
+      resultKindJa: result.resultKindJa || "地域"
     };
   }
 
@@ -518,6 +666,8 @@
     params.set("nameJa", state.location.nameJa || state.location.name || "選択地域");
     if (state.location.admin1) params.set("admin1", state.location.admin1);
     if (state.location.country) params.set("country", state.location.country);
+    if (state.location.provider) params.set("provider", state.location.provider);
+    if (state.location.resultKind) params.set("kind", state.location.resultKind);
     params.set("timezone", state.forecast?.timezone || state.location.timezone || "auto");
     params.set("mode", state.mode);
     history.replaceState({}, "", `${location.pathname}?${params}${location.hash}`);
@@ -537,7 +687,9 @@
       country: params.get("country") || "",
       latitude,
       longitude,
-      timezone: params.get("timezone") || "auto"
+      timezone: params.get("timezone") || "auto",
+      provider: params.get("provider") || "Open-Meteo",
+      resultKind: params.get("kind") || "location"
     };
   }
 
@@ -580,6 +732,14 @@
     if (!el["favorite-button"]) return;
     const favorite = isFavorite(state.location);
     el["favorite-button"].textContent = favorite ? "★ Favorite / 登録済み" : "☆ Favorite / お気に入り";
+  }
+
+  function firstDisplayNamePart(displayName) {
+    return String(displayName || "Selected Location").split(",")[0].trim();
+  }
+
+  function delay(milliseconds) {
+    return new Promise(resolve => setTimeout(resolve, milliseconds));
   }
 
   function readJson(key) {

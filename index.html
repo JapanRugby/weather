@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta name="description" content="地域を検索して、06:00〜20:00の時間別天気を英日併記の固定レイアウトで表示・PDF保存できるウェブサイトです。" />
+  <meta name="description" content="地域やスタジアムを検索して、06:00〜20:00の時間別天気を英日併記の固定レイアウトで表示・PDF保存できるウェブサイトです。" />
   <meta name="theme-color" content="#17395c" />
   <title>Hourly Weather PDF / 時間別天気PDF</title>
   <link rel="icon" href="favicon.svg" type="image/svg+xml" />
@@ -17,19 +17,19 @@
         <div>
           <p class="eyebrow">SEARCH · FORECAST · PDF</p>
           <h1>Hourly Weather PDF</h1>
-          <p>地域検索・時間別天気・定型PDF</p>
+          <p>地域・スタジアム検索・時間別天気・定型PDF</p>
         </div>
       </div>
 
       <div class="search-area">
-        <label for="location-search">Location Search / 地域検索</label>
+        <label for="location-search">Location / Stadium Search / 地域・スタジアム検索</label>
         <div class="search-row">
           <div class="search-box-wrap">
             <input
               id="location-search"
               type="search"
               autocomplete="off"
-              placeholder="宮崎市、札幌市、100-0001、Seoul…"
+              placeholder="宮崎市、東京ドーム、国立競技場、100-0001…"
               aria-autocomplete="list"
               aria-controls="search-results"
               aria-expanded="false"
@@ -39,7 +39,8 @@
           <button id="search-button" class="button primary" type="button">Search / 検索</button>
           <button id="current-location-button" class="button secondary" type="button" title="Use current location / 現在地を使う">◎ Current / 現在地</button>
         </div>
-        <p class="hint">初期表示は宮崎市です。地名・市区町村・郵便番号を世界中から検索できます。</p>
+        <p class="hint">初期表示は宮崎市です。地名・市区町村・郵便番号に加え、スタジアムや競技場などの施設名も検索できます。施設検索は検索ボタンまたはEnterで実行します。</p>
+        <p class="search-attribution">Place search / 施設検索: © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap contributors</a></p>
       </div>
 
       <div class="action-area">
@@ -146,7 +147,7 @@
       </section>
 
       <footer class="report-footer">
-        <div><span>Source / 情報源</span><strong>Open-Meteo Weather API</strong></div>
+        <div><span>Source / 情報源</span><strong id="source-label">Open-Meteo Weather API</strong></div>
         <div><span>Issued at / 発表時刻</span><strong id="issued-at">—</strong></div>
         <div><span>Generated / 作成時刻</span><strong id="generated-at">—</strong></div>
         <div class="footer-note">Forecast values are model-based and may change. / 予報値は気象モデルに基づき更新されます。</div>
@@ -159,7 +160,7 @@
     </main>
 
     <footer class="site-footer screen-only">
-      <p>Data: Open-Meteo · Static hosting: GitHub Pages · PDF: Browser print layout</p>
+      <p>Weather: Open-Meteo · Place search: OpenStreetMap Nominatim · Static hosting: GitHub Pages · PDF: Browser print layout</p>
       <p>自動モードでは、現地時刻18:00以降は翌日の06:00〜20:00、それ以前は当日を表示します。</p>
     </footer>
   </div>

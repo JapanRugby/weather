@@ -1,8 +1,8 @@
 {
   "name": "hourly-weather-pdf",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": true,
-  "description": "Searchable hourly weather report and fixed-layout PDF for GitHub Pages",
+  "description": "Searchable city and stadium hourly weather report with fixed-layout PDF for GitHub Pages",
   "scripts": {
     "start": "serve . -l 4173",
     "pdf": "node scripts/generate-pdf.mjs"
