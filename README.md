@@ -4,11 +4,15 @@
 
 ![PDF layout preview](preview.png)
 
+![Search layout preview](search-layout-preview.png)
+
 
 ## 主な機能
 
 - 初期表示は宮崎市
 - 世界中の地名、市区町村、郵便番号を検索
+- スタジアム、競技場、球場、アリーナなどの施設名を検索
+- 検索・予報日切替・操作ボタンを整列したレスポンシブ操作パネル
 - 06:00〜20:00の15時間を固定表示
 - 天気、気温、降水確率、風向、風速を英日併記
 - 気温と風速のグラフ
@@ -20,20 +24,18 @@
 - GitHub ActionsによるPages公開
 - GitHub Actionsによる定時PDF生成（初期値は宮崎市）
 
-
-## PDFレイアウト修正（v1.2）
-
-- 印刷領域をA4横 297mm × 210mm、余白0に固定
-- 本文を用紙内の固定グリッドにして、不要な2ページ目を防止
-- グラフカードに専用の高さを確保し、SVGの縦横比を維持
-- GitHub ActionsのPDF生成で用紙寸法・ヘッダー／フッター非表示を明示
-
 ## データソース
 
-- 地域検索：Open-Meteo Geocoding API
+- 地域・郵便番号検索：Open-Meteo Geocoding API
+- スタジアム・施設検索：OpenStreetMap Nominatim
 - 天気予報：Open-Meteo Forecast API
 
 APIキーは不要です。利用条件とクレジット表記はOpen-Meteoの最新規約を確認してください。
+
+
+## 画面レイアウト
+
+検索画面は、上段を「ブランド＋検索」、下段を「予報日切替＋操作ボタン」に分離しています。広い画面では横一列に整列し、タブレットでは上下2段、スマートフォンでは検索ボタンと操作ボタンが2列に切り替わります。OpenStreetMapのクレジットは検索説明の右側にまとめて表示されます。
 
 ## GitHub Pagesへの公開
 

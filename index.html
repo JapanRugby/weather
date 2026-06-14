@@ -12,47 +12,56 @@
 <body>
   <div class="page-shell">
     <section class="control-panel screen-only" aria-label="Weather controls / 天気操作">
-      <div class="brand-block">
-        <div class="brand-mark" aria-hidden="true">☀</div>
-        <div>
-          <p class="eyebrow">SEARCH · FORECAST · PDF</p>
-          <h1>Hourly Weather PDF</h1>
-          <p>地域検索・時間別天気・定型PDF</p>
-        </div>
-      </div>
-
-      <div class="search-area">
-        <label for="location-search">Location Search / 地域検索</label>
-        <div class="search-row">
-          <div class="search-box-wrap">
-            <input
-              id="location-search"
-              type="search"
-              autocomplete="off"
-              placeholder="宮崎市、東京ドーム、国立競技場、100-0001…"
-              aria-autocomplete="list"
-              aria-controls="search-results"
-              aria-expanded="false"
-            />
-            <div id="search-results" class="search-results" role="listbox" hidden></div>
+      <div class="control-main">
+        <div class="brand-block">
+          <div class="brand-mark" aria-hidden="true">☀</div>
+          <div>
+            <p class="eyebrow">SEARCH · FORECAST · PDF</p>
+            <h1>Hourly Weather PDF</h1>
+            <p>地域検索・時間別天気・定型PDF</p>
           </div>
-          <button id="search-button" class="button primary" type="button">Search / 検索</button>
-          <button id="current-location-button" class="button secondary" type="button" title="Use current location / 現在地を使う">◎ Current / 現在地</button>
         </div>
-        <p class="hint">初期表示は宮崎市です。地名・市区町村・郵便番号に加え、スタジアムや競技場などの施設名も検索できます。施設検索は検索ボタンまたはEnterで実行します。</p>
+
+        <div class="search-area">
+          <label for="location-search">Location Search / 地域検索</label>
+          <div class="search-row">
+            <div class="search-box-wrap">
+              <input
+                id="location-search"
+                type="search"
+                autocomplete="off"
+                placeholder="宮崎市、東京ドーム、国立競技場、100-0001…"
+                aria-autocomplete="list"
+                aria-controls="search-results"
+                aria-expanded="false"
+              />
+              <div id="search-results" class="search-results" role="listbox" hidden></div>
+            </div>
+            <button id="search-button" class="button primary" type="button">Search / 検索</button>
+            <button id="current-location-button" class="button secondary" type="button" title="Use current location / 現在地を使う">◎ Current / 現在地</button>
+          </div>
+          <div class="search-meta-row">
+            <p class="hint">初期表示は宮崎市です。地名・市区町村・郵便番号に加え、スタジアムや競技場などの施設名も検索できます。施設検索は検索ボタンまたはEnterで実行します。</p>
+            <p class="search-attribution">Place search / 施設検索: © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap contributors</a></p>
+          </div>
+        </div>
       </div>
-        <p class="search-attribution">Place search / 施設検索: © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap contributors</a></p>
 
       <div class="action-area">
-        <div class="mode-switch" aria-label="Forecast date mode / 予報日モード">
-          <button type="button" class="mode-button active" data-mode="auto">Auto / 自動</button>
-          <button type="button" class="mode-button" data-mode="today">Today / 今日</button>
-          <button type="button" class="mode-button" data-mode="tomorrow">Tomorrow / 明日</button>
+        <div class="mode-area">
+          <span class="control-label">Forecast date / 予報日</span>
+          <div class="mode-switch" aria-label="Forecast date mode / 予報日モード">
+            <button type="button" class="mode-button active" data-mode="auto">Auto / 自動</button>
+            <button type="button" class="mode-button" data-mode="today">Today / 今日</button>
+            <button type="button" class="mode-button" data-mode="tomorrow">Tomorrow / 明日</button>
+          </div>
         </div>
-        <button id="refresh-button" class="button secondary" type="button">↻ Refresh / 更新</button>
-        <button id="favorite-button" class="button secondary" type="button">☆ Favorite / お気に入り</button>
-        <button id="share-button" class="button secondary" type="button">↗ Share / 共有</button>
-        <button id="print-button" class="button pdf" type="button">PDF Save / PDF保存</button>
+        <div class="utility-actions">
+          <button id="refresh-button" class="button secondary" type="button">↻ Refresh / 更新</button>
+          <button id="favorite-button" class="button secondary" type="button">☆ Favorite / お気に入り</button>
+          <button id="share-button" class="button secondary" type="button">↗ Share / 共有</button>
+          <button id="print-button" class="button pdf" type="button">PDF Save / PDF保存</button>
+        </div>
       </div>
 
       <div class="saved-locations" id="saved-locations-wrap" hidden>
